@@ -33,7 +33,7 @@ export default async function StatsPage() {
       <Card>
         <CardHeader>
           <CardTitle>用户排行</CardTitle>
-          <CardDescription>ROI = 已结算盈亏 / 总投入。</CardDescription>
+          <CardDescription>ROI = 已判定盈亏 / 总投入。</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -42,7 +42,7 @@ export default async function StatsPage() {
                 <TableHead>用户</TableHead>
                 <TableHead>投注数</TableHead>
                 <TableHead>总投入</TableHead>
-                <TableHead>待结算</TableHead>
+                <TableHead>待判定</TableHead>
                 <TableHead>盈亏</TableHead>
                 <TableHead>ROI</TableHead>
               </TableRow>

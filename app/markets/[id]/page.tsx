@@ -128,8 +128,8 @@ export default async function MarketDetailPage({
             <CardTitle>绑定比赛</CardTitle>
             <CardDescription>
               {market.auto_settle
-                ? "该盘口会按绑定比赛的完赛比分自动结算。"
-                : "该盘口已绑定比赛，但未启用自动结算。"}
+                ? "该盘口会按绑定比赛的完赛比分自动判定结果。"
+                : "该盘口已绑定比赛，但未启用自动判定。"}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -172,7 +172,7 @@ export default async function MarketDetailPage({
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle>盘口信息</CardTitle>
-              <CardDescription>结算状态变化后，会自动重算未手动覆盖产出的投注。</CardDescription>
+              <CardDescription>盘口状态影响投注产出，入账状态只标记财务处理进度。</CardDescription>
             </div>
             {editable ? (
               <div className="flex flex-wrap gap-2">
@@ -210,7 +210,7 @@ export default async function MarketDetailPage({
                 <div className="mt-1 font-medium">{statusLabels[market.status]}</div>
               </div>
               <div>
-                <div className="text-muted-foreground">账务结算</div>
+                <div className="text-muted-foreground">入账状态</div>
                 <div className="mt-1">
                   <SettlementBadge isSettled={market.is_settled} />
                 </div>

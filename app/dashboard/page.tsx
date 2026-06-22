@@ -72,7 +72,7 @@ export default async function DashboardPage() {
         </Card>
         <Card>
           <CardHeader className="p-3 sm:p-6">
-            <CardDescription>待结算投入</CardDescription>
+            <CardDescription>待判定投入</CardDescription>
             <CardTitle>{formatMoney(myStats.pending_stake)}</CardTitle>
           </CardHeader>
         </Card>

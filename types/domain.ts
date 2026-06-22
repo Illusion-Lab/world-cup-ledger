@@ -11,7 +11,7 @@ export type MarketStatus =
   | "void";
 
 export const statusLabels: Record<MarketStatus, string> = {
-  pending: "待结算",
+  pending: "待判定",
   won: "赢",
   lost: "输",
   push: "走水",

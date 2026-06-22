@@ -58,7 +58,7 @@ function buildBetText(
   const lines = [
     "世界杯账本｜投注明细",
     `已选：${bets.length} 场`,
-    `汇总：投入 ${formatMoney(totals.stake)}，已结算产出 ${formatMoney(totals.payout)}，已结算盈亏 ${formatMoney(totals.profit)}，待结算 ${totals.pendingCount} 场 / ${formatMoney(totals.pendingStake)}`,
+    `汇总：投入 ${formatMoney(totals.stake)}，已判定产出 ${formatMoney(totals.payout)}，已判定盈亏 ${formatMoney(totals.profit)}，待判定 ${totals.pendingCount} 场 / ${formatMoney(totals.pendingStake)}`,
     "",
   ];
 
@@ -72,7 +72,7 @@ function buildBetText(
     if (bet.selection_team_name || bet.handicap) {
       lines.push(`球队/盘口值：${fieldValue(bet.selection_team_name)} ${fieldValue(bet.handicap)}`);
     }
-    lines.push(`自动结算：${fieldValue(bet.auto_settle)}`);
+    lines.push(`自动判定：${fieldValue(bet.auto_settle)}`);
     lines.push(`我的投入：${formatMoney(bet.stake)}`);
     lines.push(`我的产出：${formatMoney(bet.payout)}`);
     lines.push(`我的盈亏：${formatMoney(bet.profit)}`);
@@ -245,7 +245,7 @@ export function BetsList({ bets }: BetsListProps) {
             <div className="min-w-0">
               <div className="text-muted-foreground">
                 <span className="sm:hidden">盈亏</span>
-                <span className="hidden sm:inline">已结算盈亏</span>
+                <span className="hidden sm:inline">已判定盈亏</span>
               </div>
               <div
                 className={cn(
@@ -258,7 +258,7 @@ export function BetsList({ bets }: BetsListProps) {
               </div>
             </div>
             <div className="min-w-0">
-              <div className="text-muted-foreground">待结算</div>
+              <div className="text-muted-foreground">待判定</div>
               <div className="font-medium">
                 {totals.pendingCount} / {formatMoney(totals.pendingStake)}
               </div>

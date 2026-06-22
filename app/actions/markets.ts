@@ -122,7 +122,7 @@ export async function syncWorldCupScheduleAction() {
   revalidatePath("/stats");
   redirect(
     `/schedule?synced=${encodeURIComponent(
-      `已同步 ${result.syncedEvents} 场比赛，自动结算 ${result.settledMarkets} 个盘口`,
+      `已同步 ${result.syncedEvents} 场比赛，自动判定 ${result.settledMarkets} 个盘口`,
     )}`,
   );
 }

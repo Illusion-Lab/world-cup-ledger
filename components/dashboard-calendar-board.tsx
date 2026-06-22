@@ -168,7 +168,7 @@ function CalendarDayCell({ cell, index }: { cell: CalendarCell; index: number })
               <div className="text-xs text-muted-foreground">未建盘口</div>
             ) : null}
             {settledCount === 0 && day.pending_count > 0 ? (
-              <div className="text-xs text-muted-foreground">等待结算</div>
+              <div className="text-xs text-muted-foreground">等待判定</div>
             ) : null}
           </div>
         </>

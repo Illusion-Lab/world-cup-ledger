@@ -81,7 +81,7 @@ export default async function MarketsPage({
           <div className="mb-4 rounded-md border bg-secondary/40 p-3">
             <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <div className="text-sm font-medium">按日期批量结算</div>
+                <div className="text-sm font-medium">按日期批量入账</div>
                 <div className="text-xs text-muted-foreground">
                   管理员会处理当天全部盘口，创建人只会处理自己创建的盘口。
                 </div>
@@ -99,7 +99,7 @@ export default async function MarketsPage({
                   <TableHead>投注内容</TableHead>
                   <TableHead>比赛时间</TableHead>
                   <TableHead>状态</TableHead>
-                  <TableHead>结算</TableHead>
+                  <TableHead>入账</TableHead>
                   <TableHead>赔率</TableHead>
                   <TableHead>参与</TableHead>
                   <TableHead>总投入</TableHead>

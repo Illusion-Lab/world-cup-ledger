@@ -28,7 +28,7 @@ export function SettlementBadge({
 }) {
   return (
     <Badge variant={isSettled ? "success" : "outline"} className={cn("whitespace-nowrap", className)}>
-      {isSettled ? "已结算" : "未结算"}
+      {isSettled ? "已入账" : "未入账"}
     </Badge>
   );
 }
@@ -114,13 +114,13 @@ export function MarketSettlementAction({
   const nextSettled = !isSettled;
   const submission = useSettlementSubmission({
     action: updateMarketSettlementDialogAction,
-    successTitle: nextSettled ? "盘口已结算" : "盘口已取消结算",
+    successTitle: nextSettled ? "盘口已入账" : "盘口已撤销入账",
   });
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     submission.submit(new FormData(event.currentTarget), () =>
-      nextSettled ? "该盘口已标记为已结算" : "该盘口已标记为未结算",
+      nextSettled ? "该盘口已标记为已入账" : "该盘口已标记为未入账",
     );
   }
 
@@ -136,11 +136,11 @@ export function MarketSettlementAction({
           variant={isSettled ? "outline" : "default"}
           size="sm"
           loading={submission.pending}
-          loadingText={isSettled ? "取消中" : "结算中"}
+          loadingText={isSettled ? "撤销中" : "入账中"}
           className={compact ? "h-8 px-2 text-xs" : ""}
         >
           {isSettled ? <RotateCcw className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-          {isSettled ? "取消结算" : "标记结算"}
+          {isSettled ? "撤销入账" : "标记入账"}
         </LoadingButton>
         <ActionError message={submission.error} />
       </form>
@@ -161,7 +161,7 @@ export function DaySettlementActions({
   const [targetSettled, setTargetSettled] = useState(true);
   const submission = useSettlementSubmission({
     action: updateMarketDaySettlementDialogAction,
-    successTitle: targetSettled ? "当天盘口已结算" : "当天盘口已取消结算",
+    successTitle: targetSettled ? "当天盘口已入账" : "当天盘口已撤销入账",
   });
   const unavailable = disabled || uniqueDates.length === 0;
 
@@ -198,8 +198,8 @@ export function DaySettlementActions({
           disabled={unavailable || submission.pending}
           onChange={(event) => setTargetSettled(event.target.value === "true")}
         >
-          <option value="true">标记已结算</option>
-          <option value="false">标记未结算</option>
+          <option value="true">标记已入账</option>
+          <option value="false">标记未入账</option>
         </Select>
         <LoadingButton
           type="submit"

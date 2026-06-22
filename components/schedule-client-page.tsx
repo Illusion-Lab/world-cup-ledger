@@ -87,7 +87,7 @@ export function ScheduleClientPage({
         <div>
           <h1 className="text-xl font-semibold tracking-normal sm:text-2xl">世界杯赛程</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            同步赛程和比分后，可以按比赛快速创建自动结算盘口。
+            同步赛程和比分后，可以按比赛快速创建自动判定盘口。
           </p>
         </div>
         <form action={syncWorldCupScheduleAction}>

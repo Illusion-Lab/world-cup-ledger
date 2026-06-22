@@ -616,7 +616,7 @@ async function handleMarketWrites(request: ApiRequest, response: http.ServerResp
     const eventDate = stringBody(body, "eventDate");
     const isSettled = booleanBody(body, "isSettled");
     if (!eventDate) {
-      setError(response, 400, "请选择结算日期");
+      setError(response, 400, "请选择入账日期");
       return true;
     }
 
@@ -753,7 +753,7 @@ async function handleMarketWrites(request: ApiRequest, response: http.ServerResp
       return true;
     }
     if (!canEditMarket(user, market.created_by_user_id)) {
-      setError(response, 403, "没有权限修改该盘口结算状态");
+      setError(response, 403, "没有权限修改该盘口入账状态");
       return true;
     }
     await query(
