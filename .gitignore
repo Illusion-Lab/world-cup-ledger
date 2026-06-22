@@ -1,0 +1,9 @@
+.next
+node_modules
+.env
+.env.*
+!.env.example
+dist
+coverage
+*.log
+postgres_data

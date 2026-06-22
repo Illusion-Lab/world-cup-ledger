@@ -1,0 +1,78 @@
+name: world-cup-ledger
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: worldcup
+      POSTGRES_USER: worldcup
+      POSTGRES_PASSWORD: worldcup_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U worldcup -d worldcup"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    build:
+      context: .
+      target: migrator
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    command: npm run migrate
+
+  web:
+    build:
+      context: .
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      API_INTERNAL_URL: http://api:4000
+    ports:
+      - "${APP_PORT:-13218}:3000"
+
+  api:
+    build:
+      context: .
+      target: migrator
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      API_PORT: 4000
+    command: npx tsx backend/server.ts
+
+  worker:
+    build:
+      context: .
+      target: migrator
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      SYNC_ENDPOINT: http://api:4000/internal/sync/scores
+    command: node scripts/sync-worker.mjs
+
+volumes:
+  postgres_data:

@@ -1,0 +1,9 @@
+.next
+node_modules
+.git
+.env
+.env.*
+!.env.example
+README.md
+postgres_data
+npm-debug.log
