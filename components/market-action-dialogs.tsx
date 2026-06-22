@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState, useTransition } from "react";
-import { Pencil, Plus, Trash2, Wallet } from "lucide-react";
+import { ArrowRight, Pencil, Plus, Trash2, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { formatEventDateTime } from "@/lib/utils";
 import { categoryOptions, statusOptions, type Bet, type Market } from "@/types/domain";
 
 type DialogAction = (formData: FormData) => Promise<DialogActionResult>;
@@ -283,17 +284,63 @@ export function EditMarketDialog({ market }: { market: Market }) {
   );
 }
 
-export function BetDialog({ marketId, myBet }: { marketId: string; myBet: Bet | null }) {
+type NextUnbetMarket = Pick<Market, "id" | "project" | "content" | "event_date" | "event_time">;
+
+export function BetDialog({
+  marketId,
+  myBet,
+  nextUnbetMarket,
+}: {
+  marketId: string;
+  myBet: Bet | null;
+  nextUnbetMarket: NextUnbetMarket | null;
+}) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
-  const saveSubmission = useDialogSubmission({
-    action: saveBetDialogAction,
-    closeDialog: () => setOpen(false),
-  });
+  const [saveError, setSaveError] = useState("");
+  const [savePending, setSavePending] = useState(false);
+  const [saveSuccessOpen, setSaveSuccessOpen] = useState(false);
   const deleteSubmission = useDialogSubmission({
     action: deleteBetDialogAction,
     closeDialog: () => setOpen(false),
   });
-  const isBusy = saveSubmission.pending || deleteSubmission.pending;
+  const isBusy = savePending || deleteSubmission.pending;
+
+  function submitSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isBusy) return;
+
+    const formData = new FormData(event.currentTarget);
+    setSaveError("");
+    setSavePending(true);
+
+    startTransition(() => {
+      void saveBetDialogAction(formData)
+        .then((result) => {
+          if (!result.ok) {
+            setSaveError(result.error);
+            setSavePending(false);
+            return;
+          }
+
+          setOpen(false);
+          setSavePending(false);
+          setSaveSuccessOpen(true);
+          router.refresh();
+        })
+        .catch(() => {
+          setSaveError("操作失败");
+          setSavePending(false);
+        });
+    });
+  }
+
+  function goToNextUnbetMarket() {
+    if (!nextUnbetMarket) return;
+    setSaveSuccessOpen(false);
+    router.push(`/markets/${nextUnbetMarket.id}`);
+  }
 
   return (
     <>
@@ -309,7 +356,7 @@ export function BetDialog({ marketId, myBet }: { marketId: string; myBet: Bet | 
             <DialogTitle>{myBet ? "编辑我的投注" : "记录我的投注"}</DialogTitle>
             <DialogDescription>投入会参与个人盈亏统计，同一盘口每人一条投注。</DialogDescription>
           </DialogHeader>
-          <form onSubmit={saveSubmission.submit} className="grid gap-4">
+          <form onSubmit={submitSave} className="grid gap-4">
             <input type="hidden" name="marketId" value={marketId} />
             <NumberSliderField
               name="stake"
@@ -337,10 +384,10 @@ export function BetDialog({ marketId, myBet }: { marketId: string; myBet: Bet | 
               <Label htmlFor="betNote">个人备注</Label>
               <Textarea id="betNote" name="note" defaultValue={myBet?.note ?? ""} placeholder="填写备注" />
             </div>
-            <ActionError message={saveSubmission.error} />
+            <ActionError message={saveError} />
             <LoadingButton
               type="submit"
-              loading={saveSubmission.pending}
+              loading={savePending}
               loadingText="保存中"
               disabled={deleteSubmission.pending}
               className="w-full"
@@ -357,7 +404,7 @@ export function BetDialog({ marketId, myBet }: { marketId: string; myBet: Bet | 
                 variant="outline"
                 loading={deleteSubmission.pending}
                 loadingText="删除中"
-                disabled={saveSubmission.pending}
+                disabled={savePending}
                 className="w-full"
               >
                 <Trash2 className="h-4 w-4" />
@@ -368,10 +415,31 @@ export function BetDialog({ marketId, myBet }: { marketId: string; myBet: Bet | 
         </DialogContent>
       </Dialog>
       <SuccessHalfSheet
-        open={saveSubmission.successOpen}
+        open={saveSuccessOpen}
         title="投注已保存"
-        description="你的投注和盈亏统计已更新"
-      />
+        description={
+          nextUnbetMarket
+            ? `${nextUnbetMarket.project} · ${nextUnbetMarket.content}`
+            : "当前列表里已经没有未投注盘口"
+        }
+      >
+        <div className="grid gap-3">
+          {nextUnbetMarket ? (
+            <Button onClick={goToNextUnbetMarket} className="w-full">
+              <ArrowRight className="h-4 w-4" />
+              继续下一个未投注
+            </Button>
+          ) : null}
+          <Button variant="outline" onClick={() => setSaveSuccessOpen(false)} className="w-full">
+            留在当前盘口
+          </Button>
+          {nextUnbetMarket ? (
+            <p className="text-center text-xs text-muted-foreground">
+              {formatEventDateTime(nextUnbetMarket.event_date, nextUnbetMarket.event_time)}
+            </p>
+          ) : null}
+        </div>
+      </SuccessHalfSheet>
       <SuccessHalfSheet
         open={deleteSubmission.successOpen}
         title="投注已删除"

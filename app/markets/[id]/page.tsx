@@ -22,9 +22,23 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { canEditMarket, requireUser } from "@/lib/auth";
-import { getMarketDetail } from "@/lib/api-data";
+import { getMarketDetail, getMarkets, getMyBets } from "@/lib/api-data";
 import { formatEventDateTime, formatMoney } from "@/lib/utils";
-import { statusLabels } from "@/types/domain";
+import { statusLabels, type Bet, type Market } from "@/types/domain";
+
+function findNextUnbetMarket(markets: Market[], currentMarketId: string, myBets: Bet[]) {
+  const currentIndex = markets.findIndex((market) => market.id === currentMarketId);
+  const betMarketIds = new Set(myBets.map((bet) => bet.market_id));
+  const orderedMarkets =
+    currentIndex >= 0
+      ? [...markets.slice(currentIndex + 1), ...markets.slice(0, currentIndex)]
+      : markets;
+
+  return (
+    orderedMarkets.find((market) => market.id !== currentMarketId && !betMarketIds.has(market.id)) ??
+    null
+  );
+}
 
 export default async function MarketDetailPage({
   params,
@@ -36,10 +50,15 @@ export default async function MarketDetailPage({
   const user = await requireUser();
   const { id } = await params;
   const query = await searchParams;
-  const detail = await getMarketDetail(user.group!.id, id, user.id);
+  const [detail, markets, myBets] = await Promise.all([
+    getMarketDetail(user.group!.id, id, user.id),
+    getMarkets(user.group!.id),
+    getMyBets(user.group!.id, user.id),
+  ]);
   const market = detail.market;
   if (!market) notFound();
 
+  const nextUnbetMarket = findNextUnbetMarket(markets, market.id, myBets);
   const editable = canEditMarket(user, market.created_by_user_id);
   const participantStake = detail.bets.reduce((sum, bet) => sum + Number(bet.stake), 0);
   const participantProfit = detail.bets.reduce(
@@ -208,7 +227,11 @@ export default async function MarketDetailPage({
               <CardTitle>我的投注</CardTitle>
               <CardDescription>每个用户在同一盘口下维护自己的投入和备注。</CardDescription>
             </div>
-            <BetDialog marketId={market.id} myBet={detail.myBet} />
+            <BetDialog
+              marketId={market.id}
+              myBet={detail.myBet}
+              nextUnbetMarket={nextUnbetMarket}
+            />
           </CardHeader>
           <CardContent>
             {detail.myBet ? (
