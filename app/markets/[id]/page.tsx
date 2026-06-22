@@ -4,6 +4,10 @@ import { notFound } from "next/navigation";
 
 import { archiveMarketAction } from "@/app/actions/markets";
 import { BetDialog, EditMarketDialog } from "@/components/market-action-dialogs";
+import {
+  MarketSettlementAction,
+  SettlementBadge,
+} from "@/components/market-settlement-actions";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -78,6 +82,7 @@ export default async function MarketDetailPage({
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-xl font-semibold tracking-normal sm:text-2xl">{market.project}</h1>
             <StatusBadge status={market.status} />
+            <SettlementBadge isSettled={market.is_settled} />
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {market.content}，赔率 {market.odds}，由 {market.created_by_name} 创建
@@ -169,7 +174,17 @@ export default async function MarketDetailPage({
               <CardTitle>盘口信息</CardTitle>
               <CardDescription>结算状态变化后，会自动重算未手动覆盖产出的投注。</CardDescription>
             </div>
-            {editable ? <EditMarketDialog market={market} /> : null}
+            {editable ? (
+              <div className="flex flex-wrap gap-2">
+                <MarketSettlementAction
+                  marketId={market.id}
+                  isSettled={market.is_settled}
+                  canEdit={editable}
+                  compact
+                />
+                <EditMarketDialog market={market} />
+              </div>
+            ) : null}
           </CardHeader>
           <CardContent className="grid gap-4">
             {query.error ? (
@@ -193,6 +208,12 @@ export default async function MarketDetailPage({
               <div>
                 <div className="text-muted-foreground">状态</div>
                 <div className="mt-1 font-medium">{statusLabels[market.status]}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">账务结算</div>
+                <div className="mt-1">
+                  <SettlementBadge isSettled={market.is_settled} />
+                </div>
               </div>
               <div>
                 <div className="text-muted-foreground">比赛时间</div>

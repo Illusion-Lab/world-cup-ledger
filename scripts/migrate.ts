@@ -81,6 +81,7 @@ async function main() {
         event_date date not null,
         event_time text not null default '',
         status text not null default 'pending',
+        is_settled boolean not null default false,
         odds numeric(10, 3) not null,
         note text,
         created_by_user_id text not null references users(id) on delete restrict,
@@ -141,6 +142,7 @@ async function main() {
       alter table markets add column if not exists selection_home_away text;
       alter table markets add column if not exists handicap numeric(6, 2);
       alter table markets add column if not exists settled_from_event_at timestamptz;
+      alter table markets add column if not exists is_settled boolean not null default false;
 
       create table if not exists bets (
         id text primary key,

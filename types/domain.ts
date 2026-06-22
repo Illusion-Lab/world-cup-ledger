@@ -62,6 +62,7 @@ export type Market = {
   event_date: string;
   event_time: string;
   status: MarketStatus;
+  is_settled: boolean;
   odds: string;
   note: string | null;
   created_by_user_id: string;
@@ -129,6 +130,7 @@ export type DashboardCalendarMarket = {
   content: string;
   time: string | null;
   status: MarketStatus;
+  is_settled: boolean;
   stake: string;
   profit: string;
   bet_count: number;
@@ -167,6 +169,7 @@ export type Bet = {
   content?: string;
   category?: string;
   status?: MarketStatus;
+  is_settled?: boolean;
   odds?: string;
   market_note?: string | null;
   auto_settle?: boolean;

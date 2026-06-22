@@ -123,6 +123,11 @@ function numberBody(body: Record<string, unknown>, key: string) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function booleanBody(body: Record<string, unknown>, key: string) {
+  const value = body[key];
+  return value === true || value === "true" || value === "1" || value === "on";
+}
+
 function inviteCode() {
   return crypto.randomBytes(5).toString("base64url").toUpperCase().replace(/[^A-Z0-9]/g, "X");
 }
@@ -607,6 +612,48 @@ async function handleMarketWrites(request: ApiRequest, response: http.ServerResp
     return true;
   }
 
+  if (request.method === "POST" && pathname === "/markets/settlement/day") {
+    const eventDate = stringBody(body, "eventDate");
+    const isSettled = booleanBody(body, "isSettled");
+    if (!eventDate) {
+      setError(response, 400, "请选择结算日期");
+      return true;
+    }
+
+    const canSettleAll = canManageGroup(user);
+    const params: unknown[] = [user.group!.id, eventDate, isSettled];
+    const ownerClause = canSettleAll ? "" : "and created_by_user_id = $4";
+    if (!canSettleAll) params.push(user.id);
+
+    const result = await query<{ id: string }>(
+      `update markets
+          set is_settled = $3,
+              updated_at = now()
+        where group_id = $1
+          and event_date = $2::date
+          and archived_at is null
+          ${ownerClause}
+        returning id`,
+      params,
+    );
+    await query(
+      `insert into audit_logs (id, group_id, actor_user_id, entity_type, entity_id, action, detail)
+       values ($1, $2, $3, 'market', $4, 'settle_day',
+               jsonb_build_object('eventDate', $5::text, 'isSettled', $6::boolean, 'count', $7::int))`,
+      [
+        crypto.randomUUID(),
+        user.group!.id,
+        user.id,
+        eventDate,
+        eventDate,
+        isSettled,
+        result.rows.length,
+      ],
+    );
+    setJson(response, 200, { ok: true, count: result.rows.length });
+    return true;
+  }
+
   const match = pathname.match(/^\/markets\/([^/]+)(?:\/([^/]+))?$/);
   if (!match) return false;
   const marketId = match[1];
@@ -689,6 +736,38 @@ async function handleMarketWrites(request: ApiRequest, response: http.ServerResp
       `insert into audit_logs (id, group_id, actor_user_id, entity_type, entity_id, action)
        values ($1, $2, $3, 'market', $4, 'archive')`,
       [crypto.randomUUID(), user.group!.id, user.id, marketId],
+    );
+    setJson(response, 200, { ok: true });
+    return true;
+  }
+
+  if (request.method === "POST" && action === "settlement") {
+    const isSettled = booleanBody(body, "isSettled");
+    const marketResult = await query<{ created_by_user_id: string; group_id: string }>(
+      `select created_by_user_id, group_id from markets where id = $1 and archived_at is null`,
+      [marketId],
+    );
+    const market = marketResult.rows[0];
+    if (!market || market.group_id !== user.group!.id) {
+      setError(response, 404, "盘口不存在");
+      return true;
+    }
+    if (!canEditMarket(user, market.created_by_user_id)) {
+      setError(response, 403, "没有权限修改该盘口结算状态");
+      return true;
+    }
+    await query(
+      `update markets
+          set is_settled = $1,
+              updated_at = now()
+        where id = $2`,
+      [isSettled, marketId],
+    );
+    await query(
+      `insert into audit_logs (id, group_id, actor_user_id, entity_type, entity_id, action, detail)
+       values ($1, $2, $3, 'market', $4, 'settlement_update',
+               jsonb_build_object('isSettled', $5::boolean))`,
+      [crypto.randomUUID(), user.group!.id, user.id, marketId, isSettled],
     );
     setJson(response, 200, { ok: true });
     return true;

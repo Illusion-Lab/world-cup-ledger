@@ -8,8 +8,9 @@ import { formString, messagePath } from "@/lib/form";
 
 type IdResponse = { id: string };
 type SyncResponse = { syncedEvents: number; settledMarkets: number };
+type CountResponse = { count: number };
 export type DialogActionResult =
-  | { ok: true; id?: string; redirectTo?: string }
+  | { ok: true; id?: string; redirectTo?: string; count?: number }
   | { ok: false; error: string };
 
 function formPayload(formData: FormData, keys: string[]) {
@@ -79,6 +80,21 @@ async function deleteBet(formData: FormData) {
   const marketId = formString(formData, "marketId");
   await apiAction(`/markets/${marketId}/bet`, "DELETE");
   return marketId;
+}
+
+async function updateMarketSettlement(formData: FormData) {
+  const marketId = formString(formData, "marketId");
+  await apiAction(`/markets/${marketId}/settlement`, "POST", {
+    isSettled: formString(formData, "isSettled") === "true",
+  });
+  return marketId;
+}
+
+async function updateMarketDaySettlement(formData: FormData) {
+  return apiAction<CountResponse>("/markets/settlement/day", "POST", {
+    eventDate: formString(formData, "eventDate"),
+    isSettled: formString(formData, "isSettled") === "true",
+  });
 }
 
 export async function createMarketAction(formData: FormData) {
@@ -237,6 +253,36 @@ export async function deleteBetDialogAction(formData: FormData): Promise<DialogA
     revalidatePath("/bets");
     revalidatePath("/stats");
     return { ok: true };
+  } catch (error) {
+    return { ok: false, error: actionErrorMessage(error) };
+  }
+}
+
+export async function updateMarketSettlementDialogAction(
+  formData: FormData,
+): Promise<DialogActionResult> {
+  const marketId = formString(formData, "marketId");
+  try {
+    await updateMarketSettlement(formData);
+    revalidatePath(`/markets/${marketId}`);
+    revalidatePath("/markets");
+    revalidatePath("/dashboard");
+    revalidatePath("/bets");
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: actionErrorMessage(error) };
+  }
+}
+
+export async function updateMarketDaySettlementDialogAction(
+  formData: FormData,
+): Promise<DialogActionResult> {
+  try {
+    const result = await updateMarketDaySettlement(formData);
+    revalidatePath("/markets");
+    revalidatePath("/dashboard");
+    revalidatePath("/bets");
+    return { ok: true, count: result.count };
   } catch (error) {
     return { ok: false, error: actionErrorMessage(error) };
   }
