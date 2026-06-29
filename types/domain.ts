@@ -111,6 +111,9 @@ export type ExternalEvent = {
   away_score: number | null;
   last_synced_at: string;
   linked_market_count?: number;
+  skipped_at?: string | null;
+  skipped_by_user_id?: string | null;
+  skipped_by_name?: string | null;
 };
 
 export type DashboardCalendarEvent = {

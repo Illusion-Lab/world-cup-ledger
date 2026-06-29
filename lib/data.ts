@@ -442,10 +442,15 @@ export async function getExternalEventsForSchedule(groupId: string) {
             e.away_team_abbr,
             e.away_score,
             e.last_synced_at,
+            s.skipped_at,
+            s.skipped_by_user_id,
+            u.display_name as skipped_by_name,
             count(m.id) filter (where m.archived_at is null)::int as linked_market_count
        from external_events e
        left join markets m on m.external_event_id = e.id and m.group_id = $1
-      group by e.id
+       left join external_event_skips s on s.external_event_id = e.id and s.group_id = $1
+       left join users u on u.id = s.skipped_by_user_id
+      group by e.id, s.skipped_at, s.skipped_by_user_id, u.display_name
       order by e.starts_at asc`,
     [groupId],
   );

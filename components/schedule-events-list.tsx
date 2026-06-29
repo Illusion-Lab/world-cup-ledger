@@ -1,10 +1,14 @@
 "use client";
 
 import { FormEvent, useMemo, useState, useTransition } from "react";
-import { ArrowRight, ChevronDown, Eye, Trophy } from "lucide-react";
+import { ArrowRight, Ban, ChevronDown, Eye, RotateCcw, Trophy } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-import { createMarketFromEventDialogAction } from "@/app/actions/markets";
+import {
+  createMarketFromEventDialogAction,
+  skipScheduleEventDialogAction,
+  unskipScheduleEventDialogAction,
+} from "@/app/actions/markets";
 import { LoadingButton } from "@/components/loading-button";
 import { NumberSliderField } from "@/components/number-slider-field";
 import { SuccessHalfSheet } from "@/components/success-half-sheet";
@@ -22,7 +26,15 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { ExternalEvent } from "@/types/domain";
 
-type EventFilter = "active" | "all" | "pre" | "in" | "post" | "post-unlinked" | "linked";
+type EventFilter =
+  | "active"
+  | "all"
+  | "pre"
+  | "in"
+  | "post"
+  | "post-unlinked"
+  | "linked"
+  | "skipped";
 
 const INITIAL_LIMIT = 24;
 
@@ -51,14 +63,22 @@ function filterEvents(events: ExternalEvent[], filter: EventFilter) {
   if (filter === "linked") {
     return events.filter((event) => Number(event.linked_market_count ?? 0) > 0);
   }
+  if (filter === "skipped") return events.filter((event) => Boolean(event.skipped_at));
   if (filter === "post") return events.filter((event) => event.completed);
   if (filter === "post-unlinked") {
     return events.filter(
-      (event) => event.completed && Number(event.linked_market_count ?? 0) === 0,
+      (event) =>
+        event.completed &&
+        Number(event.linked_market_count ?? 0) === 0 &&
+        !event.skipped_at,
     );
   }
   if (filter === "all") return events;
   return events.filter((event) => event.status_state === filter);
+}
+
+function canToggleSkip(event: ExternalEvent) {
+  return event.completed && Number(event.linked_market_count ?? 0) === 0;
 }
 
 export function ScheduleEventsList({ events }: { events: ExternalEvent[] }) {
@@ -71,24 +91,46 @@ export function ScheduleEventsList({ events }: { events: ExternalEvent[] }) {
   const [locallyLinkedEventIds, setLocallyLinkedEventIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [localSkippedEvents, setLocalSkippedEvents] = useState<Map<string, boolean>>(
+    () => new Map(),
+  );
   const [nextEventToCreate, setNextEventToCreate] = useState<ExternalEvent | null>(null);
   const [createdMarketId, setCreatedMarketId] = useState("");
   const [createError, setCreateError] = useState("");
   const [createPending, setCreatePending] = useState(false);
+  const [skipPendingEventId, setSkipPendingEventId] = useState("");
+  const [skipError, setSkipError] = useState("");
   const [successOpen, setSuccessOpen] = useState(false);
   const effectiveEvents = useMemo(
     () =>
       events.map((event) => {
-        if (!locallyLinkedEventIds.has(event.id)) return event;
+        const localSkipped = localSkippedEvents.get(event.id);
+        const linkedEvent = locallyLinkedEventIds.has(event.id)
+          ? {
+              ...event,
+              linked_market_count: Number(event.linked_market_count ?? 0) + 1,
+              skipped_at: null,
+              skipped_by_user_id: null,
+              skipped_by_name: null,
+            }
+          : event;
+
+        if (localSkipped === undefined) return linkedEvent;
         return {
-          ...event,
-          linked_market_count: Number(event.linked_market_count ?? 0) + 1,
+          ...linkedEvent,
+          skipped_at: localSkipped ? new Date().toISOString() : null,
+          skipped_by_user_id: localSkipped ? linkedEvent.skipped_by_user_id : null,
+          skipped_by_name: localSkipped ? "你" : null,
         };
       }),
-    [events, locallyLinkedEventIds],
+    [events, locallyLinkedEventIds, localSkippedEvents],
   );
   const completedCount = useMemo(
     () => effectiveEvents.filter((event) => event.completed).length,
+    [effectiveEvents],
+  );
+  const skippedCount = useMemo(
+    () => effectiveEvents.filter((event) => event.skipped_at).length,
     [effectiveEvents],
   );
 
@@ -163,6 +205,11 @@ export function ScheduleEventsList({ events }: { events: ExternalEvent[] }) {
             next.add(eventBeingCreated.id);
             return next;
           });
+          setLocalSkippedEvents((current) => {
+            const next = new Map(current);
+            next.set(eventBeingCreated.id, false);
+            return next;
+          });
           setSelectedEvent(null);
           setSuccessOpen(true);
           setCreatePending(false);
@@ -170,6 +217,40 @@ export function ScheduleEventsList({ events }: { events: ExternalEvent[] }) {
         .catch(() => {
           setCreateError("操作失败");
           setCreatePending(false);
+        });
+    });
+  }
+
+  function updateEventSkip(event: ExternalEvent, skipped: boolean) {
+    if (skipPendingEventId) return;
+
+    const formData = new FormData();
+    formData.set("externalEventId", event.id);
+    setSkipError("");
+    setSkipPendingEventId(event.id);
+
+    const action = skipped ? skipScheduleEventDialogAction : unskipScheduleEventDialogAction;
+
+    startTransition(() => {
+      void action(formData)
+        .then((result) => {
+          if (!result.ok) {
+            setSkipError(result.error);
+            setSkipPendingEventId("");
+            return;
+          }
+
+          setLocalSkippedEvents((current) => {
+            const next = new Map(current);
+            next.set(event.id, skipped);
+            return next;
+          });
+          setSkipPendingEventId("");
+          router.refresh();
+        })
+        .catch(() => {
+          setSkipError("操作失败");
+          setSkipPendingEventId("");
         });
     });
   }
@@ -197,14 +278,22 @@ export function ScheduleEventsList({ events }: { events: ExternalEvent[] }) {
           <option value="pre">未开始</option>
           <option value="in">进行中</option>
           <option value="post">已完赛</option>
-          <option value="post-unlinked">已完赛未录入</option>
+          <option value="post-unlinked">已完赛未建盘口</option>
           <option value="linked">已建盘口</option>
+          <option value="skipped">已跳过</option>
         </Select>
         <div className="text-xs text-muted-foreground sm:text-sm">
           {visibleEvents.length} / {filteredEvents.length}
           {filter === "active" && completedCount > 0 ? `，已收起 ${completedCount} 场已完赛` : ""}
+          {filter === "post-unlinked" && skippedCount > 0 ? `，已跳过 ${skippedCount} 场` : ""}
         </div>
       </div>
+
+      {skipError ? (
+        <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {skipError}
+        </div>
+      ) : null}
 
       <div className="mb-3 grid gap-2">
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
@@ -246,6 +335,11 @@ export function ScheduleEventsList({ events }: { events: ExternalEvent[] }) {
                       {event.linked_market_count} 个盘口
                     </Badge>
                   ) : null}
+                  {event.skipped_at ? (
+                    <Badge variant="outline" className="shrink-0">
+                      已跳过
+                    </Badge>
+                  ) : null}
                   {event.stage ? (
                     <Badge variant="outline" className="min-w-0 truncate">
                       {event.stage}
@@ -282,15 +376,46 @@ export function ScheduleEventsList({ events }: { events: ExternalEvent[] }) {
                 </div>
               </div>
 
-              <Button
-                type="button"
-                size="sm"
-                className="h-8 w-full sm:h-9 xl:w-auto"
-                onClick={() => setSelectedEvent(event)}
-              >
-                <Trophy className="h-4 w-4" />
-                创建盘口
-              </Button>
+              <div className="grid gap-2 sm:grid-cols-2 xl:flex xl:justify-end">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 w-full sm:h-9 xl:w-auto"
+                  onClick={() => setSelectedEvent(event)}
+                >
+                  <Trophy className="h-4 w-4" />
+                  创建盘口
+                </Button>
+                {canToggleSkip(event) ? (
+                  event.skipped_at ? (
+                    <LoadingButton
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 w-full sm:h-9 xl:w-auto"
+                      loading={skipPendingEventId === event.id}
+                      loadingText="恢复中"
+                      onClick={() => updateEventSkip(event, false)}
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      恢复显示
+                    </LoadingButton>
+                  ) : (
+                    <LoadingButton
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 w-full sm:h-9 xl:w-auto"
+                      loading={skipPendingEventId === event.id}
+                      loadingText="跳过中"
+                      onClick={() => updateEventSkip(event, true)}
+                    >
+                      <Ban className="h-4 w-4" />
+                      跳过
+                    </LoadingButton>
+                  )
+                ) : null}
+              </div>
             </div>
           </div>
         ))}
@@ -383,7 +508,7 @@ export function ScheduleEventsList({ events }: { events: ExternalEvent[] }) {
         description={
           nextEventToCreate
             ? `${nextEventToCreate.home_team_name} vs ${nextEventToCreate.away_team_name} 可以继续录入`
-            : "当前筛选下已经没有下一场未录入比赛"
+            : "当前筛选下已经没有下一场未建盘口比赛"
         }
       >
         <div className="grid gap-2">

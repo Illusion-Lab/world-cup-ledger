@@ -469,6 +469,65 @@ async function handleMarketWrites(request: ApiRequest, response: http.ServerResp
     return true;
   }
 
+  const scheduleEventAction = pathname.match(/^\/schedule\/events\/([^/]+)\/(skip|unskip)$/);
+  if (request.method === "POST" && scheduleEventAction) {
+    const externalEventId = scheduleEventAction[1];
+    const scheduleAction = scheduleEventAction[2];
+    const eventResult = await query<{ id: string }>(
+      `select id from external_events where id = $1 limit 1`,
+      [externalEventId],
+    );
+    if (!eventResult.rows[0]) {
+      setError(response, 404, "比赛不存在，请先同步赛程");
+      return true;
+    }
+
+    if (scheduleAction === "skip") {
+      const linkedResult = await query<{ count: string }>(
+        `select count(*)::text as count
+           from markets
+          where group_id = $1
+            and external_event_id = $2
+            and archived_at is null`,
+        [user.group!.id, externalEventId],
+      );
+      if (Number(linkedResult.rows[0]?.count ?? 0) > 0) {
+        setError(response, 400, "该比赛已创建盘口，不需要跳过");
+        return true;
+      }
+
+      await query(
+        `insert into external_event_skips (id, group_id, external_event_id, skipped_by_user_id)
+         values ($1, $2, $3, $4)
+         on conflict (group_id, external_event_id)
+         do update set skipped_by_user_id = excluded.skipped_by_user_id,
+                       skipped_at = now()`,
+        [crypto.randomUUID(), user.group!.id, externalEventId, user.id],
+      );
+      await query(
+        `insert into audit_logs (id, group_id, actor_user_id, entity_type, entity_id, action)
+         values ($1, $2, $3, 'external_event', $4, 'skip_market_creation')`,
+        [crypto.randomUUID(), user.group!.id, user.id, externalEventId],
+      );
+      setJson(response, 200, { ok: true });
+      return true;
+    }
+
+    await query(
+      `delete from external_event_skips
+        where group_id = $1
+          and external_event_id = $2`,
+      [user.group!.id, externalEventId],
+    );
+    await query(
+      `insert into audit_logs (id, group_id, actor_user_id, entity_type, entity_id, action)
+       values ($1, $2, $3, 'external_event', $4, 'unskip_market_creation')`,
+      [crypto.randomUUID(), user.group!.id, user.id, externalEventId],
+    );
+    setJson(response, 200, { ok: true });
+    return true;
+  }
+
   if (request.method === "POST" && pathname === "/markets") {
     const project = stringBody(body, "project");
     const content = stringBody(body, "content");
@@ -561,6 +620,12 @@ async function handleMarketWrites(request: ApiRequest, response: http.ServerResp
       [user.group!.id, event.id, selectionHomeAway, handicap, odds],
     );
     if (duplicate.rows[0]) {
+      await query(
+        `delete from external_event_skips
+          where group_id = $1
+            and external_event_id = $2`,
+        [user.group!.id, event.id],
+      );
       setJson(response, 200, { id: duplicate.rows[0].id });
       return true;
     }
@@ -607,6 +672,12 @@ async function handleMarketWrites(request: ApiRequest, response: http.ServerResp
        values ($1, $2, $3, 'market', $4, 'create_from_event',
                jsonb_build_object('externalEventId', $5::text, 'selection', $6::text, 'handicap', $7::numeric))`,
       [crypto.randomUUID(), user.group!.id, user.id, id, event.id, selectionHomeAway, handicap],
+    );
+    await query(
+      `delete from external_event_skips
+        where group_id = $1
+          and external_event_id = $2`,
+      [user.group!.id, event.id],
     );
     setJson(response, 201, { id });
     return true;

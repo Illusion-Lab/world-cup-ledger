@@ -97,6 +97,15 @@ async function updateMarketDaySettlement(formData: FormData) {
   });
 }
 
+async function updateScheduleEventSkip(formData: FormData, skipped: boolean) {
+  const externalEventId = formString(formData, "externalEventId");
+  await apiAction(
+    `/schedule/events/${externalEventId}/${skipped ? "skip" : "unskip"}`,
+    "POST",
+  );
+  return externalEventId;
+}
+
 export async function createMarketAction(formData: FormData) {
   let result: IdResponse;
   try {
@@ -213,6 +222,30 @@ export async function createMarketFromEventDialogAction(
     revalidatePath("/markets");
     revalidatePath("/dashboard");
     return { ok: true, id: result.id, redirectTo: `/markets/${result.id}` };
+  } catch (error) {
+    return { ok: false, error: actionErrorMessage(error) };
+  }
+}
+
+export async function skipScheduleEventDialogAction(
+  formData: FormData,
+): Promise<DialogActionResult> {
+  try {
+    await updateScheduleEventSkip(formData, true);
+    revalidatePath("/schedule");
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: actionErrorMessage(error) };
+  }
+}
+
+export async function unskipScheduleEventDialogAction(
+  formData: FormData,
+): Promise<DialogActionResult> {
+  try {
+    await updateScheduleEventSkip(formData, false);
+    revalidatePath("/schedule");
+    return { ok: true };
   } catch (error) {
     return { ok: false, error: actionErrorMessage(error) };
   }

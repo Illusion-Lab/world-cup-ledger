@@ -134,6 +134,15 @@ async function main() {
           check (status_state in ('pre', 'in', 'post'))
       );
 
+      create table if not exists external_event_skips (
+        id text primary key,
+        group_id text not null references groups(id) on delete cascade,
+        external_event_id text not null references external_events(id) on delete cascade,
+        skipped_by_user_id text references users(id) on delete set null,
+        skipped_at timestamptz not null default now(),
+        unique (group_id, external_event_id)
+      );
+
       alter table markets add column if not exists external_event_id text;
       alter table markets add column if not exists auto_settle boolean not null default false;
       alter table markets add column if not exists settlement_kind text;
@@ -178,6 +187,8 @@ async function main() {
       create index if not exists audit_logs_group_id_idx on audit_logs(group_id);
       create index if not exists external_events_event_date_idx on external_events(event_date);
       create index if not exists external_events_status_state_idx on external_events(status_state);
+      create index if not exists external_event_skips_group_id_idx on external_event_skips(group_id);
+      create index if not exists external_event_skips_external_event_id_idx on external_event_skips(external_event_id);
     `);
 
     const userCount = await client.query<{ count: string }>(
