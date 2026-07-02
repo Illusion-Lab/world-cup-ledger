@@ -708,6 +708,7 @@ async function handleMarketWrites(request: ApiRequest, response: http.ServerResp
   if (request.method === "POST" && pathname === "/markets/settlement/day") {
     const eventDate = stringBody(body, "eventDate");
     const isSettled = booleanBody(body, "isSettled");
+    const dateScope = stringBody(body, "dateScope") === "through_date" ? "through_date" : "day";
     if (!eventDate) {
       setError(response, 400, "请选择入账日期");
       return true;
@@ -716,6 +717,7 @@ async function handleMarketWrites(request: ApiRequest, response: http.ServerResp
     const canSettleAll = canManageGroup(user);
     const params: unknown[] = [user.group!.id, eventDate, isSettled];
     const ownerClause = canSettleAll ? "" : "and created_by_user_id = $4";
+    const dateClause = dateScope === "through_date" ? "and event_date <= $2::date" : "and event_date = $2::date";
     if (!canSettleAll) params.push(user.id);
 
     const result = await query<{ id: string }>(
@@ -723,7 +725,7 @@ async function handleMarketWrites(request: ApiRequest, response: http.ServerResp
           set is_settled = $3,
               updated_at = now()
         where group_id = $1
-          and event_date = $2::date
+          ${dateClause}
           and archived_at is null
           ${ownerClause}
         returning id`,
@@ -732,13 +734,14 @@ async function handleMarketWrites(request: ApiRequest, response: http.ServerResp
     await query(
       `insert into audit_logs (id, group_id, actor_user_id, entity_type, entity_id, action, detail)
        values ($1, $2, $3, 'market', $4, 'settle_day',
-               jsonb_build_object('eventDate', $5::text, 'isSettled', $6::boolean, 'count', $7::int))`,
+               jsonb_build_object('eventDate', $5::text, 'dateScope', $6::text, 'isSettled', $7::boolean, 'count', $8::int))`,
       [
         crypto.randomUUID(),
         user.group!.id,
         user.id,
         eventDate,
         eventDate,
+        dateScope,
         isSettled,
         result.rows.length,
       ],

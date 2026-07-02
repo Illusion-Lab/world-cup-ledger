@@ -94,6 +94,7 @@ async function updateMarketDaySettlement(formData: FormData) {
   return apiAction<CountResponse>("/markets/settlement/day", "POST", {
     eventDate: formString(formData, "eventDate"),
     isSettled: formString(formData, "isSettled") === "true",
+    dateScope: formString(formData, "dateScope") || "day",
   });
 }
 

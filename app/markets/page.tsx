@@ -83,7 +83,7 @@ export default async function MarketsPage({
               <div>
                 <div className="text-sm font-medium">按日期批量入账</div>
                 <div className="text-xs text-muted-foreground">
-                  管理员会处理当天全部盘口，创建人只会处理自己创建的盘口。
+                  可选择只处理当天，或处理选中日期及之前；管理员处理范围内全部盘口，创建人只处理自己创建的盘口。
                 </div>
               </div>
               <div className="text-xs text-muted-foreground">{marketDates.length} 个日期</div>

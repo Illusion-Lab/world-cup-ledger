@@ -158,10 +158,11 @@ export function DaySettlementActions({
 }) {
   const uniqueDates = useMemo(() => Array.from(new Set(dates)).filter(Boolean), [dates]);
   const [selectedDate, setSelectedDate] = useState(uniqueDates[0] ?? "");
+  const [dateScope, setDateScope] = useState("day");
   const [targetSettled, setTargetSettled] = useState(true);
   const submission = useSettlementSubmission({
     action: updateMarketDaySettlementDialogAction,
-    successTitle: targetSettled ? "当天盘口已入账" : "当天盘口已撤销入账",
+    successTitle: targetSettled ? "范围内盘口已入账" : "范围内盘口已撤销入账",
   });
   const unavailable = disabled || uniqueDates.length === 0;
 
@@ -169,13 +170,14 @@ export function DaySettlementActions({
     event.preventDefault();
     submission.submit(new FormData(event.currentTarget), (result) => {
       const count = result.ok ? result.count ?? 0 : 0;
-      return `已更新 ${count} 个盘口`;
+      const scopeText = dateScope === "through_date" ? `${selectedDate} 及之前` : selectedDate;
+      return `已更新 ${count} 个盘口，范围：${scopeText}`;
     });
   }
 
   return (
     <>
-      <form className="grid gap-2 md:grid-cols-[180px_150px_auto]" onSubmit={onSubmit}>
+      <form className="grid gap-2 md:grid-cols-[160px_150px_150px_auto]" onSubmit={onSubmit}>
         <Select
           name="eventDate"
           value={selectedDate}
@@ -191,6 +193,15 @@ export function DaySettlementActions({
           ) : (
             <option value="">暂无日期</option>
           )}
+        </Select>
+        <Select
+          name="dateScope"
+          value={dateScope}
+          disabled={unavailable || submission.pending}
+          onChange={(event) => setDateScope(event.target.value)}
+        >
+          <option value="day">仅选中日</option>
+          <option value="through_date">选中日及之前</option>
         </Select>
         <Select
           name="isSettled"
@@ -210,7 +221,7 @@ export function DaySettlementActions({
         >
           批量处理
         </LoadingButton>
-        <div className="md:col-span-3">
+        <div className="md:col-span-4">
           <ActionError message={submission.error} />
         </div>
       </form>
