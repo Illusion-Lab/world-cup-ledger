@@ -28,7 +28,29 @@ import {
 import { canEditMarket, requireUser } from "@/lib/auth";
 import { getMarketDetail, getMarkets, getMyBets } from "@/lib/api-data";
 import { formatEventDateTime, formatMoney } from "@/lib/utils";
-import { statusLabels, type Bet, type Market } from "@/types/domain";
+import { statusLabels, type Bet, type ExternalEvent, type Market } from "@/types/domain";
+
+function matchScoreText(event: ExternalEvent) {
+  const regularHome = event.regular_time_home_score;
+  const regularAway = event.regular_time_away_score;
+  const totalHome = event.home_score;
+  const totalAway = event.away_score;
+
+  if (regularHome !== null && regularAway !== null) {
+    const regularScore = `${regularHome} - ${regularAway}`;
+    if (
+      totalHome !== null &&
+      totalAway !== null &&
+      (regularHome !== totalHome || regularAway !== totalAway)
+    ) {
+      return `常规 ${regularScore} / 总分 ${totalHome} - ${totalAway}`;
+    }
+    return regularScore;
+  }
+
+  if (totalHome === null || totalAway === null) return "未完赛";
+  return `${totalHome} - ${totalAway}`;
+}
 
 function findNextUnbetMarket(markets: Market[], currentMarketId: string, myBets: Bet[]) {
   const currentIndex = markets.findIndex((market) => market.id === currentMarketId);
@@ -149,9 +171,7 @@ export default async function MarketDetailPage({
               <div>
                 <div className="text-muted-foreground">比分</div>
                 <div>
-                  {detail.externalEvent.home_score === null || detail.externalEvent.away_score === null
-                    ? "未完赛"
-                    : `${detail.externalEvent.home_score} - ${detail.externalEvent.away_score}`}
+                  {matchScoreText(detail.externalEvent)}
                 </div>
               </div>
               <div>

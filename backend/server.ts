@@ -578,9 +578,11 @@ async function handleMarketWrites(request: ApiRequest, response: http.ServerResp
       home_team_id: string | null;
       home_team_name: string;
       home_score: number | null;
+      settlement_home_score: number | null;
       away_team_id: string | null;
       away_team_name: string;
       away_score: number | null;
+      settlement_away_score: number | null;
       completed: boolean;
       event_date: string;
       event_time: string;
@@ -589,9 +591,27 @@ async function handleMarketWrites(request: ApiRequest, response: http.ServerResp
               home_team_id,
               home_team_name,
               home_score,
+              coalesce(
+                regular_time_home_score,
+                case
+                  when lower(coalesce(status_detail, '')) not like '%aet%'
+                   and lower(coalesce(status_detail, '')) not like '%pen%'
+                  then home_score
+                  else null
+                end
+              ) as settlement_home_score,
               away_team_id,
               away_team_name,
               away_score,
+              coalesce(
+                regular_time_away_score,
+                case
+                  when lower(coalesce(status_detail, '')) not like '%aet%'
+                   and lower(coalesce(status_detail, '')) not like '%pen%'
+                  then away_score
+                  else null
+                end
+              ) as settlement_away_score,
               completed,
               to_char(event_date, 'YYYY-MM-DD') as event_date,
               event_time
@@ -633,10 +653,12 @@ async function handleMarketWrites(request: ApiRequest, response: http.ServerResp
     const selectedTeamName = selectionHomeAway === "home" ? event.home_team_name : event.away_team_name;
     const selectedTeamId = selectionHomeAway === "home" ? event.home_team_id : event.away_team_id;
     const status =
-      event.completed && event.home_score !== null && event.away_score !== null
+      event.completed &&
+      event.settlement_home_score !== null &&
+      event.settlement_away_score !== null
         ? getAsianHandicapStatus(
-            selectionHomeAway === "home" ? event.home_score : event.away_score,
-            selectionHomeAway === "home" ? event.away_score : event.home_score,
+            selectionHomeAway === "home" ? event.settlement_home_score : event.settlement_away_score,
+            selectionHomeAway === "home" ? event.settlement_away_score : event.settlement_home_score,
             handicap,
           )
         : "pending";

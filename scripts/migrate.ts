@@ -123,10 +123,12 @@ async function main() {
         home_team_name text not null,
         home_team_abbr text,
         home_score integer,
+        regular_time_home_score integer,
         away_team_id text,
         away_team_name text not null,
         away_team_abbr text,
         away_score integer,
+        regular_time_away_score integer,
         raw jsonb not null default '{}'::jsonb,
         last_synced_at timestamptz not null default now(),
         unique (provider, external_id),
@@ -152,6 +154,8 @@ async function main() {
       alter table markets add column if not exists handicap numeric(6, 2);
       alter table markets add column if not exists settled_from_event_at timestamptz;
       alter table markets add column if not exists is_settled boolean not null default false;
+      alter table external_events add column if not exists regular_time_home_score integer;
+      alter table external_events add column if not exists regular_time_away_score integer;
 
       create table if not exists bets (
         id text primary key,

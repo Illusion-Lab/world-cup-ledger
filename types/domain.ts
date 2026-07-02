@@ -105,10 +105,12 @@ export type ExternalEvent = {
   home_team_name: string;
   home_team_abbr: string | null;
   home_score: number | null;
+  regular_time_home_score: number | null;
   away_team_id: string | null;
   away_team_name: string;
   away_team_abbr: string | null;
   away_score: number | null;
+  regular_time_away_score: number | null;
   last_synced_at: string;
   linked_market_count?: number;
   skipped_at?: string | null;
@@ -124,6 +126,8 @@ export type DashboardCalendarEvent = {
   status_state: ExternalEventStatusState;
   home_score: number | null;
   away_score: number | null;
+  regular_time_home_score: number | null;
+  regular_time_away_score: number | null;
   linked_market_count: number;
 };
 

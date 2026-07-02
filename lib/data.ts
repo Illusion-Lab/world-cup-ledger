@@ -95,6 +95,8 @@ export async function getDashboardSummary(groupId: string, userId: string) {
                      'status_state', e.status_state,
                      'home_score', e.home_score,
                      'away_score', e.away_score,
+                     'regular_time_home_score', e.regular_time_home_score,
+                     'regular_time_away_score', e.regular_time_away_score,
                      'linked_market_count', coalesce(linked.linked_market_count, 0)
                    )
                    order by e.event_time asc, e.name asc
@@ -264,10 +266,12 @@ export async function getMarketDetail(groupId: string, marketId: string, userId:
               home_team_name,
               home_team_abbr,
               home_score,
+              regular_time_home_score,
               away_team_id,
               away_team_name,
               away_team_abbr,
               away_score,
+              regular_time_away_score,
               last_synced_at
          from external_events
         where id = (select external_event_id from markets where id = $1 and group_id = $2)
@@ -437,10 +441,12 @@ export async function getExternalEventsForSchedule(groupId: string) {
             e.home_team_name,
             e.home_team_abbr,
             e.home_score,
+            e.regular_time_home_score,
             e.away_team_id,
             e.away_team_name,
             e.away_team_abbr,
             e.away_score,
+            e.regular_time_away_score,
             e.last_synced_at,
             s.skipped_at,
             s.skipped_by_user_id,

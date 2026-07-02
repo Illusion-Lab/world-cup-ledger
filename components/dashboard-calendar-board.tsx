@@ -63,7 +63,16 @@ function buildCalendarCells(days: DashboardCalendarDay[]) {
 }
 
 function eventScore(event: DashboardCalendarEvent) {
-  if (!event.completed || event.home_score === null || event.away_score === null) return "";
+  if (!event.completed) return "";
+  if (
+    event.regular_time_home_score !== null &&
+    event.regular_time_home_score !== undefined &&
+    event.regular_time_away_score !== null &&
+    event.regular_time_away_score !== undefined
+  ) {
+    return ` ${event.regular_time_home_score}-${event.regular_time_away_score}`;
+  }
+  if (event.home_score === null || event.away_score === null) return "";
   return ` ${event.home_score}-${event.away_score}`;
 }
 

@@ -45,6 +45,22 @@ function EventStateBadge({ event }: { event: ExternalEvent }) {
 }
 
 function scoreText(event: ExternalEvent) {
+  if (
+    event.regular_time_home_score !== null &&
+    event.regular_time_home_score !== undefined &&
+    event.regular_time_away_score !== null &&
+    event.regular_time_away_score !== undefined
+  ) {
+    const regularScore = `${event.regular_time_home_score} - ${event.regular_time_away_score}`;
+    const totalScore =
+      event.home_score === null || event.away_score === null
+        ? null
+        : `${event.home_score} - ${event.away_score}`;
+
+    if (totalScore && totalScore !== regularScore) return `常规 ${regularScore}`;
+    return regularScore;
+  }
+
   if (event.home_score === null || event.away_score === null) return "vs";
   return `${event.home_score} - ${event.away_score}`;
 }

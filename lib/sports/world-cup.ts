@@ -30,10 +30,12 @@ type NormalizedEvent = {
   homeTeamName: string;
   homeTeamAbbr: string | null;
   homeScore: number | null;
+  regularTimeHomeScore: number | null;
   awayTeamId: string | null;
   awayTeamName: string;
   awayTeamAbbr: string | null;
   awayScore: number | null;
+  regularTimeAwayScore: number | null;
   raw: unknown;
 };
 
@@ -49,6 +51,19 @@ type EspnCompetitor = {
   };
 };
 
+type EspnEventDetail = {
+  clock?: {
+    value?: number | string;
+    displayValue?: string;
+  };
+  team?: {
+    id?: string;
+  };
+  scoreValue?: number | string;
+  scoringPlay?: boolean;
+  shootout?: boolean;
+};
+
 type EspnEvent = {
   id?: string;
   uid?: string;
@@ -59,6 +74,7 @@ type EspnEvent = {
   competitions?: Array<{
     date?: string;
     status?: {
+      period?: number;
       type?: {
         state?: string;
         completed?: boolean;
@@ -72,6 +88,7 @@ type EspnEvent = {
       displayName?: string;
     };
     altGameNote?: string;
+    details?: EspnEventDetail[];
     competitors?: EspnCompetitor[];
   }>;
   status?: {
@@ -93,11 +110,13 @@ type EspnScoreboard = {
 type SettledMarketRow = {
   id: string;
   group_id: string;
+  status: MarketStatus;
+  settled_from_event_at: string | null;
   odds: string;
   selection_home_away: TeamSide;
   handicap: string;
-  home_score: number;
-  away_score: number;
+  settlement_home_score: number;
+  settlement_away_score: number;
   external_event_id: string;
 };
 
@@ -145,10 +164,84 @@ function scoreOrNull(value: unknown) {
   return Number.isFinite(score) ? score : null;
 }
 
+function scoreValueOrOne(value: unknown) {
+  const parsed = scoreOrNull(value);
+  return parsed === null ? 1 : parsed;
+}
+
 function normalizeStatus(state: string | undefined): "pre" | "in" | "post" {
   if (state === "post") return "post";
   if (state === "in") return "in";
   return "pre";
+}
+
+function isRegularTimeScoringDetail(detail: EspnEventDetail) {
+  if (!detail.scoringPlay || detail.shootout) return false;
+  const clockValue = scoreOrNull(detail.clock?.value);
+  if (clockValue !== null) return clockValue <= 5400;
+
+  const displayValue = textOrNull(detail.clock?.displayValue);
+  const minute = Number(displayValue?.match(/^(\d+)/)?.[1]);
+  return Number.isFinite(minute) && minute <= 90;
+}
+
+function deriveRegularTimeScore({
+  home,
+  away,
+  details,
+  homeScore,
+  awayScore,
+  statusPeriod,
+}: {
+  home: EspnCompetitor;
+  away: EspnCompetitor;
+  details: EspnEventDetail[];
+  homeScore: number | null;
+  awayScore: number | null;
+  statusPeriod: number | undefined;
+}) {
+  const homeTeamId = textOrNull(home.team?.id ?? home.id);
+  const awayTeamId = textOrNull(away.team?.id ?? away.id);
+  const scoringDetails = details.filter((detail) => detail.scoringPlay && !detail.shootout);
+
+  if (homeTeamId && awayTeamId && scoringDetails.length > 0) {
+    let regularHomeScore = 0;
+    let regularAwayScore = 0;
+
+    for (const detail of scoringDetails) {
+      if (!isRegularTimeScoringDetail(detail)) continue;
+      const teamId = textOrNull(detail.team?.id);
+      if (teamId === homeTeamId) {
+        regularHomeScore += scoreValueOrOne(detail.scoreValue);
+      } else if (teamId === awayTeamId) {
+        regularAwayScore += scoreValueOrOne(detail.scoreValue);
+      }
+    }
+
+    return {
+      regularTimeHomeScore: regularHomeScore,
+      regularTimeAwayScore: regularAwayScore,
+    };
+  }
+
+  if (homeScore === null || awayScore === null) {
+    return {
+      regularTimeHomeScore: null,
+      regularTimeAwayScore: null,
+    };
+  }
+
+  if (statusPeriod && statusPeriod > 2 && (homeScore !== 0 || awayScore !== 0)) {
+    return {
+      regularTimeHomeScore: null,
+      regularTimeAwayScore: null,
+    };
+  }
+
+  return {
+    regularTimeHomeScore: homeScore,
+    regularTimeAwayScore: awayScore,
+  };
 }
 
 function teamName(competitor: EspnCompetitor | undefined, fallback: string) {
@@ -171,6 +264,16 @@ function normalizeEspnEvent(event: EspnEvent): NormalizedEvent | null {
   const startsAt = competition?.date ?? event.date ?? new Date().toISOString();
   const local = formatDateTimeInAppZone(startsAt);
   const statusType = competition?.status?.type ?? event.status?.type;
+  const homeScore = scoreOrNull(home.score);
+  const awayScore = scoreOrNull(away.score);
+  const regularTimeScore = deriveRegularTimeScore({
+    home,
+    away,
+    details: competition?.details ?? [],
+    homeScore,
+    awayScore,
+    statusPeriod: competition?.status?.period,
+  });
 
   return {
     id: `${ESPN_PROVIDER}:${externalId}`,
@@ -193,17 +296,20 @@ function normalizeEspnEvent(event: EspnEvent): NormalizedEvent | null {
     homeTeamId: textOrNull(home.team?.id ?? home.id),
     homeTeamName: teamName(home, "Home"),
     homeTeamAbbr: textOrNull(home.team?.abbreviation),
-    homeScore: scoreOrNull(home.score),
+    homeScore,
+    regularTimeHomeScore: regularTimeScore.regularTimeHomeScore,
     awayTeamId: textOrNull(away.team?.id ?? away.id),
     awayTeamName: teamName(away, "Away"),
     awayTeamAbbr: textOrNull(away.team?.abbreviation),
-    awayScore: scoreOrNull(away.score),
+    awayScore,
+    regularTimeAwayScore: regularTimeScore.regularTimeAwayScore,
     raw: {
       id: event.id,
       uid: event.uid,
       date: startsAt,
       status: statusType,
       season: event.season,
+      details: competition?.details ?? [],
     },
   };
 }
@@ -270,15 +376,17 @@ async function upsertEvent(event: NormalizedEvent) {
         home_team_name,
         home_team_abbr,
         home_score,
+        regular_time_home_score,
         away_team_id,
         away_team_name,
         away_team_abbr,
         away_score,
+        regular_time_away_score,
         raw,
         last_synced_at)
      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
              $11, $12, $13, $14, $15, $16, $17, $18, $19,
-             $20, $21, $22, $23, now())
+             $20, $21, $22, $23, $24, $25, now())
      on conflict (provider, external_id)
      do update set uid = excluded.uid,
                    name = excluded.name,
@@ -295,10 +403,12 @@ async function upsertEvent(event: NormalizedEvent) {
                    home_team_name = excluded.home_team_name,
                    home_team_abbr = excluded.home_team_abbr,
                    home_score = excluded.home_score,
+                   regular_time_home_score = excluded.regular_time_home_score,
                    away_team_id = excluded.away_team_id,
                    away_team_name = excluded.away_team_name,
                    away_team_abbr = excluded.away_team_abbr,
                    away_score = excluded.away_score,
+                   regular_time_away_score = excluded.regular_time_away_score,
                    raw = excluded.raw,
                    last_synced_at = now()`,
     [
@@ -320,10 +430,12 @@ async function upsertEvent(event: NormalizedEvent) {
       event.homeTeamName,
       event.homeTeamAbbr,
       event.homeScore,
+      event.regularTimeHomeScore,
       event.awayTeamId,
       event.awayTeamName,
       event.awayTeamAbbr,
       event.awayScore,
+      event.regularTimeAwayScore,
       JSON.stringify(event.raw),
     ],
   );
@@ -338,23 +450,57 @@ async function settleCompletedMarkets(actorUserId?: string | null, groupId?: str
     const markets = await client.query<SettledMarketRow>(
       `select m.id,
               m.group_id,
+              m.status,
+              m.settled_from_event_at,
               m.odds,
               m.selection_home_away,
               m.handicap,
               m.external_event_id,
-              e.home_score,
-              e.away_score
+              coalesce(
+                e.regular_time_home_score,
+                case
+                  when lower(coalesce(e.status_detail, '')) not like '%aet%'
+                   and lower(coalesce(e.status_detail, '')) not like '%pen%'
+                  then e.home_score
+                  else null
+                end
+              ) as settlement_home_score,
+              coalesce(
+                e.regular_time_away_score,
+                case
+                  when lower(coalesce(e.status_detail, '')) not like '%aet%'
+                   and lower(coalesce(e.status_detail, '')) not like '%pen%'
+                  then e.away_score
+                  else null
+                end
+              ) as settlement_away_score
          from markets m
          join external_events e on e.id = m.external_event_id
         where m.archived_at is null
-          and m.status = 'pending'
           and m.auto_settle = true
           and m.settlement_kind = 'asian_handicap'
+          and (m.status = 'pending' or m.settled_from_event_at is not null)
           and m.selection_home_away in ('home', 'away')
           and m.handicap is not null
           and e.completed = true
-          and e.home_score is not null
-          and e.away_score is not null
+          and coalesce(
+                e.regular_time_home_score,
+                case
+                  when lower(coalesce(e.status_detail, '')) not like '%aet%'
+                   and lower(coalesce(e.status_detail, '')) not like '%pen%'
+                  then e.home_score
+                  else null
+                end
+              ) is not null
+          and coalesce(
+                e.regular_time_away_score,
+                case
+                  when lower(coalesce(e.status_detail, '')) not like '%aet%'
+                   and lower(coalesce(e.status_detail, '')) not like '%pen%'
+                  then e.away_score
+                  else null
+                end
+              ) is not null
           ${groupClause}
         for update`,
       params,
@@ -365,14 +511,18 @@ async function settleCompletedMarkets(actorUserId?: string | null, groupId?: str
 
     for (const market of markets.rows) {
       const selectedScore =
-        market.selection_home_away === "home" ? market.home_score : market.away_score;
+        market.selection_home_away === "home" ? market.settlement_home_score : market.settlement_away_score;
       const opponentScore =
-        market.selection_home_away === "home" ? market.away_score : market.home_score;
+        market.selection_home_away === "home" ? market.settlement_away_score : market.settlement_home_score;
       const status = getAsianHandicapStatus(
         Number(selectedScore),
         Number(opponentScore),
         Number(market.handicap),
       );
+
+      if (market.status === status && market.settled_from_event_at) {
+        continue;
+      }
 
       await client.query(
         `update markets
@@ -404,7 +554,13 @@ async function settleCompletedMarkets(actorUserId?: string | null, groupId?: str
       await client.query(
         `insert into audit_logs (id, group_id, actor_user_id, entity_type, entity_id, action, detail)
          values ($1, $2, $3, 'market', $4, 'auto_settle',
-                 jsonb_build_object('externalEventId', $5::text, 'status', $6::text))`,
+                 jsonb_build_object(
+                   'externalEventId', $5::text,
+                   'status', $6::text,
+                   'scoreBasis', 'regular_time',
+                   'homeScore', $7::int,
+                   'awayScore', $8::int
+                 ))`,
         [
           crypto.randomUUID(),
           market.group_id,
@@ -412,6 +568,8 @@ async function settleCompletedMarkets(actorUserId?: string | null, groupId?: str
           market.id,
           market.external_event_id,
           status,
+          Number(market.settlement_home_score),
+          Number(market.settlement_away_score),
         ],
       );
 
